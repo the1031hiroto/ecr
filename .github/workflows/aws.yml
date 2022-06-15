@@ -37,7 +37,7 @@ env:
   ECS_SERVICE: test
   ECS_CLUSTER: test
   ECS_TASK_DEFINITION: .aws/task-definition.json
-  CONTAINER_NAME: test
+  CONTAINER_NAME: test  # .aws/task-definition.jsonのcontainerDefinitions.name
 
 permissions:
   contents: read
