@@ -71,7 +71,7 @@ jobs:
       id: build-image
       with:
         push: true
-        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:639e9c60a0848ef46b33b93c81581c233ff034d
+        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:a639e9c60a0848ef46b33b93c81581c233ff034d
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
