@@ -31,3 +31,5 @@
 /config/master.key
 
 /docker/db/postgres/data/*
+
+!aws/*.png

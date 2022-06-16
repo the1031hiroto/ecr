@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "fargate demo"
+
+Parameters:
+  TemplateBucketName:
+    Type: String
+    Default: soda-2022-07
+
+  ProjectName:
+    Type: String
+    Default: soda-2022-07
+
+  HTTPPort:
+    Type: Number
+    Default: 3000
+
+  HTTPSPort:
+    Type: Number
+    Default: 443
+
+  ServiceCpu:
+    Type: Number
+    Default: 512
+
+  ServiceMemory:
+    Type: Number
+    Default: 1024
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+
+  DBEngine:
+    Type: String
+    Default: postgres
+
+  DBEngineVersion:
+    Type: String
+    Default: 13.3
+    Description: aws rds describe-db-engine-versions --engine postgres --query 'DBEngineVersions[].[DBEngineVersionDescription,EngineVersion,Status]' --output table
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+
+  DBMasterUsername:
+    Type: String
+    Default: postgres
+
+  DBMasterUserPassword:
+    Type: String
+    Default: Passw0rd
+
+Resources:
+  ECRStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    Properties:
+      TemplateURL: ecr.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    Properties:
+      TemplateURL: vpc.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        AvailabilityZone1: a
+        AvailabilityZone2: d
+        CidrIp1: 10.0.1.0/24
+        CidrIp2: 10.0.2.0/24
+        CidrIp3: 10.0.3.0/24
+        CidrIp4: 10.0.4.0/24
+        HTTPPort: !Ref HTTPPort
+        HTTPSPort: !Ref HTTPSPort
+        VPCCidrBlock: 10.0.0.0/16
+
+  RDSStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VPCStack
+    Properties:
+      TemplateURL: rds.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        AvailabilityZone: a
+        DBAllocatedStorage: !Ref DBAllocatedStorage
+        DBEngine: !Ref DBEngine
+        DBEngineVersion: !Ref DBEngineVersion
+        DBInstanceClass: !Ref DBInstanceClass
+        DBMasterUsername: !Ref DBMasterUsername
+        DBMasterUserPassword: !Ref DBMasterUserPassword
+        PrivateSubnet1: !GetAtt VPCStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCStack.Outputs.PrivateSubnet2
+        DBSecurityGroup: !GetAtt VPCStack.Outputs.DBSecurityGroup
+
+  FargateStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    DependsOn:
+      - VPCStack
+      - ECRStack
+    Properties:
+      TemplateURL: fargate.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Repository: !GetAtt ECRStack.Outputs.ECRRepository
+        ServiceCpu: !Ref ServiceCpu
+        ServiceMemory: !Ref ServiceMemory
+        HTTPPort: !Ref HTTPPort
+        ServiceSecurityGroup: !GetAtt VPCStack.Outputs.ServiceSecurityGroup
+        PrivateSubnet1: !GetAtt VPCStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCStack.Outputs.PrivateSubnet2
+        DBEndpoint: !GetAtt RDSStack.Outputs.DBInstanceEndpointAddress
+        ALBTargetGroup: !GetAtt ALBStack.Outputs.ALBTargetGroup
+
+  ALBStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VPCStack
+    Properties:
+      TemplateURL: alb.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        HTTPPort: !Ref HTTPPort
+        ALBSecurityGroup: !GetAtt VPCStack.Outputs.ALBSecurityGroup
+        PublicSubnet1: !GetAtt VPCStack.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCStack.Outputs.PublicSubnet2
+        VPC: !GetAtt VPCStack.Outputs.VPC
+
+        HealthyThresholdCount: 5
+        UnhealthyThresholdCount: 2
+        HealthCheckTimeoutSeconds: 5
+        HealthCheckIntervalSeconds: 30
+        HttpCode: 200

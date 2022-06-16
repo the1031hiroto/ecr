@@ -1,11 +1,10 @@
 default: &default
   adapter: postgresql
+  host: <%= ENV.fetch('DATABASE_HOST') { 'db' } %>
+  port: <%= ENV.fetch('DATABASE_PORT') { 5432 } %>
+  username: <%= ENV.fetch('DATABASE_USER') { 'postgres' } %>
+  password: <%= ENV.fetch('DATABASE_PASSWORD') { 'Passw0rd' } %>
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  host: db
-  username: postgres
-  password: pass
-  timeout: 5000
-  encoding: utf8
 
 development:
   <<: *default

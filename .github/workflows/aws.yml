@@ -33,11 +33,11 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  ECR_REPOSITORY: test
-  ECS_SERVICE: test
-  ECS_CLUSTER: test
+  ECR_REPOSITORY: rails-test
+  ECS_SERVICE: rails-test-service
+  ECS_CLUSTER: rails-test
   ECS_TASK_DEFINITION: .aws/task-definition.json
-  CONTAINER_NAME: test  # .aws/task-definition.jsonのcontainerDefinitions.name
+  CONTAINER_NAME: rails-test-container  # .aws/task-definition.jsonのcontainerDefinitions.name
 
 permissions:
   contents: read
@@ -52,6 +52,9 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
+    - name: buildx
+      uses: docker/setup-buildx-action@v1
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
@@ -64,17 +67,13 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Build, tag, and push image to Amazon ECR
+      uses: docker/build-push-action@v2
       id: build-image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        # Build a docker container and
-        # push it to ECR so that it can
-        # be deployed to ECS.
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      with:
+        push: true
+        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
@@ -82,7 +81,8 @@ jobs:
       with:
         task-definition: ${{ env.ECS_TASK_DEFINITION }}
         container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.build-image.outputs.image }}
+        # image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
