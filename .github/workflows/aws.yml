@@ -33,11 +33,11 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  ECR_REPOSITORY: test
-  ECS_SERVICE: test
-  ECS_CLUSTER: test
+  ECR_REPOSITORY: rails-test
+  ECS_SERVICE: rails-test-service
+  ECS_CLUSTER: rails-test
   ECS_TASK_DEFINITION: .aws/task-definition.json
-  CONTAINER_NAME: test  # .aws/task-definition.jsonのcontainerDefinitions.name
+  CONTAINER_NAME: rails-test-container  # .aws/task-definition.jsonのcontainerDefinitions.name
 
 permissions:
   contents: read
@@ -75,18 +75,18 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    # - name: Fill in the new image ID in the Amazon ECS task definition
-    #   id: task-def
-    #   uses: aws-actions/amazon-ecs-render-task-definition@v1
-    #   with:
-    #     task-definition: ${{ env.ECS_TASK_DEFINITION }}
-    #     container-name: ${{ env.CONTAINER_NAME }}
-    #     image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
-    # - name: Deploy Amazon ECS task definition
-    #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-    #   with:
-    #     task-definition: ${{ steps.task-def.outputs.task-definition }}
-    #     service: ${{ env.ECS_SERVICE }}
-    #     cluster: ${{ env.ECS_CLUSTER }}
-    #     wait-for-service-stability: true
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
