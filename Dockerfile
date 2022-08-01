@@ -5,8 +5,12 @@ RUN apt-get update -qq && apt-get install -y build-essential libpq-dev postgresq
 WORKDIR /work
 
 COPY Gemfile Gemfile
+COPY Gemfile.lock Gemfile.lock
 RUN bundle install
 COPY . /work/
+
+# gitignoreされてるから
+RUN bundle exec rake app:update:bin
 
 EXPOSE 3000
 

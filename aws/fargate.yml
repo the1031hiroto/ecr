@@ -75,6 +75,8 @@ Resources:
               Value: production
             - Name: DATABASE_HOST
               Value: !Ref DBEndpoint
+            - Name: RAILS_MASTER_KEY
+              Value: 76edb257a704f3fa1c6eafd3eceb28a3
 
 
   Service:

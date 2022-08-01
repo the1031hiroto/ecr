@@ -27,35 +27,37 @@ CF. [Amazon ECR インターフェイス VPC エンドポイント (AWS PrivateL
 
 ## deploy
 ```
-aws s3 mb s3://soda-2022-07 --profile vwc --region ap-northeast-1
+aws s3 mb s3://soda-2022-08 --profile default --region ap-northeast-1
 
 aws cloudformation package \
     --template-file aws/main.yml \
-    --s3-bucket soda-2022-07 \
+    --s3-bucket soda-2022-08 \
     --output-template-file .aws/artifact.yml \
-    --profile vwc \
+    --profile default \
     --region ap-northeast-1
 
 aws cloudformation deploy \
     --template-file .aws/artifact.yml \
     --stack-name soda-demo \
     --capabilities CAPABILITY_NAMED_IAM \
-    --profile vwc \
+    --profile default \
     --region ap-northeast-1
 
 aws ecr get-login-password \
     --region ap-northeast-1 \
-    --profile vwc |
+    --profile default |
     docker login \
     --username AWS \
-    --password-stdin 739032999255.dkr.ecr.ap-northeast-1.amazonaws.com
+    --password-stdin XXXXXXXXXX.dkr.ecr.ap-northeast-1.amazonaws.com
 
-docker build -t soda-2022-07 .
+docker build -t soda-2022-08 .
 
-docker tag soda-2022-07:latest 739032999255.dkr.ecr.ap-northeast-1.amazonaws.com/soda-2022-07:latest
+docker tag soda-2022-08:latest XXXXXXXXXX.dkr.ecr.ap-northeast-1.amazonaws.com/soda-2022-08:latest
 
-docker push 739032999255.dkr.ecr.ap-northeast-1.amazonaws.com/soda-2022-07:latest
+docker push XXXXXXXXXX.dkr.ecr.ap-northeast-1.amazonaws.com/soda-2022-08:latest
 ```
+
+http://{ALB.DNSName}.ap-northeast-1.elb.amazonaws.com:3000/
 
 ## RDS PostgreSQL versions
 
@@ -92,3 +94,18 @@ $ aws rds describe-db-engine-versions --engine postgres --query 'DBEngineVersion
 `config.middleware.delete ActionDispatch::HostAuthorization`
 
 CF. [Rails6のActionDispatch::HostAuthorizationとELBのヘルスチェックの共存](https://qiita.com/reireias/items/544a93c567a153c3ad8f)
+
+## ローリングアップデート
+二つ目のタスクが起動後5~6分後に一つ目のタスクが停止する
+
+タスクが二つある時は順番に表示される
+
+### gitignoreを考慮
+1. bin/
+```
+bundle exec rake app:update:bin
+```
+
+2. config/master.key
+
+`RAILS_MASTER_KEY`を設定

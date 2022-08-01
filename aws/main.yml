@@ -4,11 +4,11 @@ Description: "fargate demo"
 Parameters:
   TemplateBucketName:
     Type: String
-    Default: soda-2022-07
+    Default: soda-2022-08
 
   ProjectName:
     Type: String
-    Default: soda-2022-07
+    Default: soda-2022-08
 
   HTTPPort:
     Type: Number
@@ -135,3 +135,10 @@ Resources:
         HealthCheckTimeoutSeconds: 5
         HealthCheckIntervalSeconds: 30
         HttpCode: 200
+
+Outputs:
+  ECRRepository:
+    Value: !GetAtt ECRStack.Outputs.ECRRepository
+
+  ALBEndpoint:
+    Value: !GetAtt ALBStack.Outputs.ALBEndpoint
