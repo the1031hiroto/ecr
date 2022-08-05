@@ -2,10 +2,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "fargate demo"
 
 Parameters:
-  TemplateBucketName:
-    Type: String
-    Default: soda-2022-08
-
   ProjectName:
     Type: String
     Default: soda-2022-08
@@ -50,6 +46,10 @@ Parameters:
   DBMasterUserPassword:
     Type: String
     Default: Passw0rd
+
+  RailsMasterKey:
+    Type: String
+    Description: config/master.keyがgitignoreされているため
 
 Resources:
   ECRStack:
@@ -102,6 +102,7 @@ Resources:
     DependsOn:
       - VPCStack
       - ECRStack
+      - ALBStack
     Properties:
       TemplateURL: fargate.yml
       Parameters:
@@ -114,7 +115,8 @@ Resources:
         PrivateSubnet1: !GetAtt VPCStack.Outputs.PrivateSubnet1
         PrivateSubnet2: !GetAtt VPCStack.Outputs.PrivateSubnet2
         DBEndpoint: !GetAtt RDSStack.Outputs.DBInstanceEndpointAddress
-        ALBTargetGroup: !GetAtt ALBStack.Outputs.ALBTargetGroup
+        ALBTargetGroup: !GetAtt ALBStack.Outputs.ALBTargetGroupBlue
+        RailsMasterKey: !Ref RailsMasterKey
 
   ALBStack:
     Type: AWS::CloudFormation::Stack
@@ -129,12 +131,27 @@ Resources:
         PublicSubnet1: !GetAtt VPCStack.Outputs.PublicSubnet1
         PublicSubnet2: !GetAtt VPCStack.Outputs.PublicSubnet2
         VPC: !GetAtt VPCStack.Outputs.VPC
-
-        HealthyThresholdCount: 5
+        HealthyThresholdCount: 2
         UnhealthyThresholdCount: 2
         HealthCheckTimeoutSeconds: 5
         HealthCheckIntervalSeconds: 30
         HttpCode: 200
+
+  CodeDeployStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - ALBStack
+      - FargateStack
+    Properties:
+      TemplateURL: code_deploy.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        ALBTargetGroupBlue: !GetAtt ALBStack.Outputs.ALBTargetGroupBlue
+        ALBTargetGroupGreen: !GetAtt ALBStack.Outputs.ALBTargetGroupGreen
+        ALBListenerBlue: !GetAtt ALBStack.Outputs.ALBListenerBlue
+        ALBListenerGreen: !GetAtt ALBStack.Outputs.ALBListenerGreen
+        ClusterName: !GetAtt FargateStack.Outputs.Cluster
+        ServiceName: !GetAtt FargateStack.Outputs.Service
 
 Outputs:
   ECRRepository:
@@ -142,3 +159,12 @@ Outputs:
 
   ALBEndpoint:
     Value: !GetAtt ALBStack.Outputs.ALBEndpoint
+
+  TaskDefinition:
+    Value: !GetAtt FargateStack.Outputs.TaskDefinition
+
+  CodeDeployDeploymentGroup:
+    Value: !GetAtt CodeDeployStack.Outputs.CodeDeployDeploymentGroup
+
+  CodeDeployApplication:
+    Value: !GetAtt CodeDeployStack.Outputs.CodeDeployApplication

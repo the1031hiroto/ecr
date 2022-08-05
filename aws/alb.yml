@@ -47,6 +47,7 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       Type: application
+      # Log欲しい場合
       # LoadBalancerAttributes:
       #   - Key: access_logs.s3.enabled
       #     Value: true
@@ -55,11 +56,14 @@ Resources:
       #   - Key: access_logs.s3.prefix
       #     Value: !Ref ALBlogbucketprefix
 
-  ALBTargetGroup:
+#=================================
+#  For Blue/Green Update (ProdTrafficRoute)
+#=================================
+  ALBTargetGroupBlue:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       VpcId: !Ref VPC
-      Name: !Sub ${ProjectName}-ALBTargetGroup
+      Name: !Sub ${ProjectName}-ALBTargetGroupBlue
       Protocol: HTTP
       Port: !Ref HTTPPort
       HealthCheckProtocol: HTTP
@@ -73,20 +77,57 @@ Resources:
         HttpCode: !Ref HttpCode
       TargetType: ip
 
-  ALBListener:
+  ALBListenerBlue:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - TargetGroupArn: !Ref ALBTargetGroup
+        - TargetGroupArn: !Ref ALBTargetGroupBlue
           Type: forward
       LoadBalancerArn: !Ref ALB
       Port: !Ref HTTPPort
       Protocol: HTTP
 
+#=================================
+#  For Blue/Green Update (TestTrafficRoute)
+#=================================
+  ALBTargetGroupGreen:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Name: !Sub ${ProjectName}-ALBTargetGroupGreen
+      Protocol: HTTP
+      Port: !Ref HTTPPort
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckPort: traffic-port
+      HealthyThresholdCount: !Ref HealthyThresholdCount
+      UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+      HealthCheckTimeoutSeconds: !Ref HealthCheckTimeoutSeconds
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
+      Matcher:
+        HttpCode: !Ref HttpCode
+      TargetType: ip
+
+  ALBListenerGreen:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref ALBTargetGroupGreen
+          Type: forward
+      LoadBalancerArn: !Ref ALB
+      Port: 10080
+      Protocol: HTTP
+
 
 Outputs:
-  ALBTargetGroup:
-    Value: !Ref ALBTargetGroup
+  ALBTargetGroupBlue:
+    Value: !Ref ALBTargetGroupBlue
+  ALBTargetGroupGreen:
+    Value: !Ref ALBTargetGroupGreen
+  ALBListenerBlue:
+    Value: !Ref ALBListenerBlue
+  ALBListenerGreen:
+    Value: !Ref ALBListenerGreen
 
   ALBEndpoint:
     Value: !Sub "http://${ALB.DNSName}"

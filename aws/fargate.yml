@@ -35,6 +35,9 @@ Parameters:
   PrivateSubnet2:
     Type: String
 
+  RailsMasterKey:
+    Type: String
+
 
 Resources:
   ECSLogGroup:
@@ -76,7 +79,7 @@ Resources:
             - Name: DATABASE_HOST
               Value: !Ref DBEndpoint
             - Name: RAILS_MASTER_KEY
-              Value: 76edb257a704f3fa1c6eafd3eceb28a3
+              Value: !Ref RailsMasterKey
 
 
   Service:
@@ -87,7 +90,7 @@ Resources:
       DesiredCount: 1
       TaskDefinition: !Ref TaskDefinition
       ServiceName: !Sub "${ProjectName}-service"
-      HealthCheckGracePeriodSeconds: 3600
+      HealthCheckGracePeriodSeconds: 300
       LoadBalancers:
         - ContainerName: !Sub "${ProjectName}-container"
           ContainerPort: !Ref HTTPPort
@@ -99,6 +102,8 @@ Resources:
           Subnets:
             - !Ref PrivateSubnet1
             - !Ref PrivateSubnet2
+      DeploymentController:
+        Type: CODE_DEPLOY
 
   FargateTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -132,6 +137,9 @@ Resources:
 Outputs:
   Cluster:
     Value: !Ref Cluster
-
+  Service:
+    Value: !GetAtt Service.Name
   FargateTaskExecutionRole:
     Value: !Ref FargateTaskExecutionRole
+  TaskDefinition:
+    Value: !Ref TaskDefinition

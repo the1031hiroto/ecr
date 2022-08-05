@@ -18,7 +18,6 @@ module Work
     #
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
-    config.middleware.delete ActionDispatch::HostAuthorization
 
     # ALBを使用するため
     config.middleware.delete ActionDispatch::HostAuthorization

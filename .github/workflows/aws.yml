@@ -7,11 +7,7 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  ECR_REPOSITORY: soda-2022-08
-  ECS_SERVICE: soda-2022-08-service
-  ECS_CLUSTER: soda-2022-08-cluster
-  CONTAINER_NAME: soda-2022-08-container  # .aws/task-definition.jsonのcontainerDefinitions.name
-  ECS_TASK: soda-demo-FargateStack-1PLJMCOLR6NSM-TaskDefinition-y9ClnoepoQcx
+  STACK_NAME: soda-demo
 
 permissions:
   contents: read
@@ -36,6 +32,13 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
+    - name: Get Names
+      run: |
+        echo "REPOSITORY_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "ECRRepository") | .OutputValue')" >> $GITHUB_ENV
+        echo "TASK_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "TaskDefinition") | .OutputValue')" >> $GITHUB_ENV
+        echo "CODEDEPLOY_APP_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "CodeDeployApplication") | .OutputValue')" >> $GITHUB_ENV
+        echo "CODEDEPLOY_GROUP_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "CodeDeployDeploymentGroup") | .OutputValue')" >> $GITHUB_ENV
+
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
@@ -45,13 +48,14 @@ jobs:
       id: build-image
       with:
         push: true
-        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        tags: ${{ env.REPOSITORY_NAME }}:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Download task definition
+    - name: Download Task Definition
       run: |
-        aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK }} --query taskDefinition > aws/task-definition.json
+        aws ecs describe-task-definition --task-definition ${{ env.TASK_NAME }} --query taskDefinition > aws/task-definition.json
+        echo "CONTAINER_NAME=$(aws ecs describe-task-definition --task-definition ${{ env.TASK_NAME }} --query taskDefinition | jq -r '.containerDefinitions[].name')" >> $GITHUB_ENV
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
@@ -59,12 +63,13 @@ jobs:
       with:
         task-definition: aws/task-definition.json
         container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        image: ${{ env.REPOSITORY_NAME }}:latest
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
+        codedeploy-appspec: aws/appspec.yml
+        codedeploy-application: ${{ env.CODEDEPLOY_APP_NAME }}
+        codedeploy-deployment-group: ${{ env.CODEDEPLOY_GROUP_NAME }}

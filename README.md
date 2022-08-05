@@ -1,14 +1,22 @@
 # Fargate with Rails
-![Test Image 1](aws/architecture.png)
+![Architecture Image](aws/architecture.png)
 ## 作成したもの
 
-ALB(PublicSubnet1 & 2), Fargate(PrivateSubnet1 & 2), DB(PrivateSubnet1 & 2)それぞれにセキュリティグループを作成してサクセスを制限
+1. ALB(PublicSubnet1 & 2), Fargate(PrivateSubnet1 & 2), DB(PrivateSubnet1 & 2)それぞれにセキュリティグループを作成してサクセスを制限
+2. Fargate(Blue/Green Update)
+3. Github Actions(deploy)
+    1. Docker Image build
+    2. ECRにプッシュ
+    3. Fargateのタスク定義作成
+    4. Blue/Green Update
+4. deploy_stack.sh(CloudFormation用)
 
 ### Subnet
 1. PublicSubnet1(AvailabilityZone: a)
 2. PublicSubnet2(AvailabilityZone: d)
 3. PrivateSubnet1(AvailabilityZone: a)
 4. PrivateSubnet2(AvailabilityZone: d)
+
 ### Security Group
 1. ALB Security Group      => ALB用
 2. Service Security Group  => ECS Fargate用、 Security Groupからのアクセスのみ許可
@@ -26,9 +34,15 @@ CF. [Amazon ECR インターフェイス VPC エンドポイント (AWS PrivateL
 
 
 ## deploy
+CF. [aws/deploy_stack.sh](aws/deploy_stack.sh)
+
+### テンプレートの保存先S3作成(初回のみ)
 ```
 aws s3 mb s3://soda-2022-08 --profile default --region ap-northeast-1
+```
 
+### Cloud Formationデプロイ
+```
 aws cloudformation package \
     --template-file aws/main.yml \
     --s3-bucket soda-2022-08 \
@@ -42,7 +56,12 @@ aws cloudformation deploy \
     --capabilities CAPABILITY_NAMED_IAM \
     --profile default \
     --region ap-northeast-1
+```
 
+### ECRにプッシュ
+※上のCloudFormationがFargateを作り始める前に実行の必要あり
+
+```
 aws ecr get-login-password \
     --region ap-northeast-1 \
     --profile default |
@@ -57,7 +76,15 @@ docker tag soda-2022-08:latest XXXXXXXXXX.dkr.ecr.ap-northeast-1.amazonaws.com/s
 docker push XXXXXXXXXX.dkr.ecr.ap-northeast-1.amazonaws.com/soda-2022-08:latest
 ```
 
-http://{ALB.DNSName}.ap-northeast-1.elb.amazonaws.com:3000/
+### ALBのDNS名取得
+正常に作成完了していれば表示されるはず
+```
+aws cloudformation describe-stacks \
+    --stack-name soda-demo |
+    jq -r '.Stacks[].Outputs[] |
+    select(.OutputKey == "ALBEndpoint") |
+    .OutputValue'
+```
 
 ## RDS PostgreSQL versions
 
@@ -98,7 +125,7 @@ CF. [Rails6のActionDispatch::HostAuthorizationとELBのヘルスチェックの
 ## ローリングアップデート
 二つ目のタスクが起動後5~6分後に一つ目のタスクが停止する
 
-タスクが二つある時は順番に表示される
+タスクが二つある時は順番(ランダムの可能性もあり)に表示される
 
 ### gitignoreを考慮
 1. bin/
@@ -109,3 +136,46 @@ bundle exec rake app:update:bin
 2. config/master.key
 
 `RAILS_MASTER_KEY`を設定
+
+
+## Blue/Green
+
+[CloudFormationでECSのBlue/Greenデプロイができるようになったので試す](https://bluepixel.hatenablog.com/entry/2020/05/23/191401)
+
+### 公式さんはCloudFormaionからBlue/Greenデプロイを実行するなら可能と言ってるけど、制約が多くて使いづらそう
+[AWS CloudFormation を使用して CodeDeploy を通じて ECS ブルー/グリーンデプロイを実行する](https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/blue-green.html)
+
+### 制約が多くて使いづらそう
+[CloudFormation を使用して ECS ブルー/グリーンデプロイメントを管理する際の考慮事項](https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/blue-green.html#blue-green-considerations)
+- ECSタスク定義もしくはECSタスクセットと同時に、他のリソースの変更できない
+- 動的な参照を使用してParameter StoreやSecrets Managerなどの外部サービスから値を取得できない
+- 進行中のグリーンデプロイをキャンセルするには、CodeDeploy または ECS ではなく、CloudFormation でスタックの更新をキャンセル
+- 出力値の宣言や他のスタックからの値のインポートはできない
+- ネストされたスタックリソースを使用できない
+
+### 自分でCodeDeploy定義すればいけるのでは？
+[aws-actions/amazon-ecs-deploy-task-definition](https://github.com/aws-actions/amazon-ecs-deploy-task-definition#aws-codedeploy-support)を使えばいけそうな予感
+
+
+### DeploymentGroupがECSサポートしていない問題
+> For blue/green deployments, AWS CloudFormation supports deployments on Lambda compute platforms only. You can perform Amazon ECS blue/green deployments using AWS::CodeDeploy::BlueGreen hook. See Perform Amazon ECS blue/green deployments through CodeDeploy using AWS CloudFormation for more information.
+
+[AWS::CodeDeploy::DeploymentGroup](https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-resource-codedeploy-deploymentgroup.html#cfn-codedeploy-deploymentgroup-deploymentstyle)
+
+[cliと併せて頑張るって方法もあるっぽい](https://qiita.com/neruneruo/items/d62140f29f067b28925b#%E8%BF%BD%E8%A8%98)
+
+### [us-east-1で動くって](https://github.com/aws-cloudformation/cloudformation-coverage-roadmap/issues/483#issuecomment-1100238755)
+> I just tested in us-east-1 as well and I was able to deploy my CFN stack with the DeploymentGroup successfully.
+
+`ap-northeast-1`でも動いた。
+
+
+aws cloudformation describe-stacks --stack-name soda-demo | jq -r '.Stacks[].Outputs | map(select(.ExportName=="soda-demo-FargateStack-1USJFEJD3VDEK-TaskDefinition"))[] | .OutputValue'
+
+aws cloudformation describe-stacks --stack-name soda-demo | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "TaskDefinition") | .OutputValue'
+
+aws ecs describe-task-definition --task-definition soda-demo-FargateStack-1USJFEJD3VDEK-TaskDefinition-8epMNm7b3uVt --query taskDefinition > aws/task-definition.json
+
+## Cost
+$5/day ぐらい
+![Cost Image](aws/cost.png)

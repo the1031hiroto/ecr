@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: soda-2022-08
+  ALBTargetGroupBlue:
+    Type: String
+  ALBTargetGroupGreen:
+    Type: String
+  ALBListenerBlue:
+    Type: String
+  ALBListenerGreen:
+    Type: String
+  ClusterName:
+    Type: String
+  ServiceName:
+    Type: String
+
+Resources:
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: soda-2022-08-code-deploy-app
+      ComputePlatform: ECS
+
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      BlueGreenDeploymentConfiguration:
+        DeploymentReadyOption:
+          ActionOnTimeout: CONTINUE_DEPLOYMENT
+          WaitTimeInMinutes: 0
+        TerminateBlueInstancesOnDeploymentSuccess:
+          Action: TERMINATE
+      DeploymentStyle:
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+        DeploymentType: BLUE_GREEN
+      ECSServices:
+        - ClusterName: !Ref ClusterName
+          ServiceName: !Ref ServiceName
+      LoadBalancerInfo:
+        TargetGroupPairInfoList:
+          - TargetGroups:
+              - Name: !Sub "${ProjectName}-ALBTargetGroupBlue"
+              - Name: !Sub "${ProjectName}-ALBTargetGroupGreen"
+            ProdTrafficRoute:
+              ListenerArns:
+                - !Ref ALBListenerBlue
+            TestTrafficRoute:
+              ListenerArns:
+                - !Ref ALBListenerGreen
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+
+#=================================
+#  BlueGreen CodeDeploy Role
+#=================================
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS
+
+
+Outputs:
+  CodeDeployApplication:
+    Value: !Ref CodeDeployApplication
+
+  CodeDeployDeploymentGroup:
+    Value: !Ref CodeDeployDeploymentGroup
