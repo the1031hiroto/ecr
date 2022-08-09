@@ -32,6 +32,9 @@
 CF. [Amazon ECR インターフェイス VPC エンドポイント (AWS PrivateLink)](https://docs.aws.amazon.com/ja_jp/AmazonECR/latest/userguide/vpc-endpoints.html)
 
 
+### IAM
+1. GithubActionsRole(OIDCProviderを使ってシークレットキーを使用しない)
+
 
 ## deploy
 CF. [aws/deploy_stack.sh](aws/deploy_stack.sh)
@@ -83,6 +86,16 @@ aws cloudformation describe-stacks \
     --stack-name soda-demo |
     jq -r '.Stacks[].Outputs[] |
     select(.OutputKey == "ALBEndpoint") |
+    .OutputValue'
+```
+
+### Github ActionD
+secretsに`AWS_ROLE_ARN`を追加する(`GithubActionsRoleArn`)
+```
+aws cloudformation describe-stacks \
+    --stack-name soda-demo |
+    jq -r '.Stacks[].Outputs[] |
+    select(.OutputKey == "GithubActionsRoleArn") |
     .OutputValue'
 ```
 
@@ -170,11 +183,11 @@ bundle exec rake app:update:bin
 `ap-northeast-1`でも動いた。
 
 
-aws cloudformation describe-stacks --stack-name soda-demo | jq -r '.Stacks[].Outputs | map(select(.ExportName=="soda-demo-FargateStack-1USJFEJD3VDEK-TaskDefinition"))[] | .OutputValue'
-
-aws cloudformation describe-stacks --stack-name soda-demo | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "TaskDefinition") | .OutputValue'
-
-aws ecs describe-task-definition --task-definition soda-demo-FargateStack-1USJFEJD3VDEK-TaskDefinition-8epMNm7b3uVt --query taskDefinition > aws/task-definition.json
+### update-service
+CloudFormationからFargate Serviceを更新しようとするとエラーになる => CodeDeployから更新しないといけない
+```
+ Unable to update task definition on services with a CODE_DEPLOY deployment controller. Use AWS CodeDeploy to trigger a new deployment.
+```
 
 ## Cost
 $5/day ぐらい

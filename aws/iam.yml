@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "fro Github Actions"
+
+Parameters:
+  ProjectName:
+    Type: String
+
+  GithubRepositoryName:
+    Type: String
+
+  ECRRepositoryArn:
+    Type: String
+
+  ServiceArn:
+    Type: String
+
+  FargateTaskExecutionRoleArn:
+    Type: String
+
+  FargateTaskRoleArn:
+    Type: String
+
+Resources:
+  GithubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-github-actions-role"
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/ReadOnlyAccess]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Ref GithubOidc
+            Condition:
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GithubRepositoryName}:*
+
+  GithubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ThumbprintList:
+        - a031c46782e6e6c662c2c87c76da9aa62ccabd8e
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+      ClientIdList:
+        - "sts.amazonaws.com"
+
+  GithubActionsPoricy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${ProjectName}-github-actions-policy"
+      Roles:
+        - !Ref GithubActionsRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # ECR
+          - Effect: Allow
+            Action: "ecr:GetAuthorizationToken"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+              - "ecr:PutImage"
+            Resource: !Ref ECRRepositoryArn
+          # ECS
+          - Effect: Allow
+            Action: "ecs:RegisterTaskDefinition"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "ecs:UpdateServicePrimaryTaskSet"
+              - "ecs:DescribeServices"
+              - "ecs:UpdateService"
+            Resource: !Ref ServiceArn
+          - Effect: Allow
+            Action: "iam:PassRole"
+            Resource: !Ref FargateTaskExecutionRoleArn
+            Condition:
+              StringLike:
+                "iam:PassedToService": "ecs-tasks.amazonaws.com"
+          - Effect: Allow
+            Action: "iam:PassRole"
+            Resource: !Ref FargateTaskRoleArn
+
+Outputs:
+  GithubActionsRoleArn:
+    Value: !GetAtt GithubActionsRole.Arn

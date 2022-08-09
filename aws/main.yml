@@ -6,6 +6,10 @@ Parameters:
     Type: String
     Default: soda-2022-08
 
+  GithubRepositoryName:
+    Type: String
+    Default: the1031hiroto/ecr
+
   HTTPPort:
     Type: Number
     Default: 3000
@@ -151,7 +155,23 @@ Resources:
         ALBListenerBlue: !GetAtt ALBStack.Outputs.ALBListenerBlue
         ALBListenerGreen: !GetAtt ALBStack.Outputs.ALBListenerGreen
         ClusterName: !GetAtt FargateStack.Outputs.Cluster
-        ServiceName: !GetAtt FargateStack.Outputs.Service
+        ServiceName: !GetAtt FargateStack.Outputs.ServiceName
+
+  IAMStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    DependsOn:
+      - ECRStack
+      - FargateStack
+    Properties:
+      TemplateURL: iam.yml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        GithubRepositoryName: !Ref GithubRepositoryName
+        ECRRepositoryArn: !GetAtt ECRStack.Outputs.ECRRepositoryArn
+        ServiceArn: !GetAtt FargateStack.Outputs.ServiceArn
+        FargateTaskExecutionRoleArn: !GetAtt FargateStack.Outputs.FargateTaskExecutionRoleArn
+        FargateTaskRoleArn: !GetAtt FargateStack.Outputs.FargateTaskRoleArn
 
 Outputs:
   ECRRepository:
@@ -168,3 +188,6 @@ Outputs:
 
   CodeDeployApplication:
     Value: !GetAtt CodeDeployStack.Outputs.CodeDeployApplication
+
+  GithubActionsRoleArn:
+    Value: !GetAtt IAMStack.Outputs.GithubActionsRoleArn

@@ -137,9 +137,15 @@ Resources:
 Outputs:
   Cluster:
     Value: !Ref Cluster
-  Service:
+  ServiceArn:
+    Value: !Ref Service
+  ServiceName:
     Value: !GetAtt Service.Name
   FargateTaskExecutionRole:
     Value: !Ref FargateTaskExecutionRole
+  FargateTaskExecutionRoleArn:
+    Value: !GetAtt FargateTaskExecutionRole.Arn
+  FargateTaskRoleArn:
+    Value: !GetAtt TaskRole.Arn
   TaskDefinition:
     Value: !Ref TaskDefinition
