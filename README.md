@@ -58,7 +58,8 @@ aws cloudformation deploy \
     --stack-name soda-demo \
     --capabilities CAPABILITY_NAMED_IAM \
     --profile default \
-    --region ap-northeast-1
+    --region ap-northeast-1 \
+    --parameter-overrides RailsMasterKey=`cat config/master.key`
 ```
 
 ### ECRにプッシュ
@@ -187,6 +188,11 @@ bundle exec rake app:update:bin
 CloudFormationからFargate Serviceを更新しようとするとエラーになる => CodeDeployから更新しないといけない
 ```
  Unable to update task definition on services with a CODE_DEPLOY deployment controller. Use AWS CodeDeploy to trigger a new deployment.
+```
+
+### デプロイ中にデプロイしようとするとエラーになる
+```
+The Deployment Group 'already has an active Deployment
 ```
 
 ## Cost

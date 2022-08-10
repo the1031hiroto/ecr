@@ -163,6 +163,7 @@ Resources:
     DependsOn:
       - ECRStack
       - FargateStack
+      - CodeDeployStack
     Properties:
       TemplateURL: iam.yml
       Parameters:
@@ -172,6 +173,8 @@ Resources:
         ServiceArn: !GetAtt FargateStack.Outputs.ServiceArn
         FargateTaskExecutionRoleArn: !GetAtt FargateStack.Outputs.FargateTaskExecutionRoleArn
         FargateTaskRoleArn: !GetAtt FargateStack.Outputs.FargateTaskRoleArn
+        CodeDeployApplication: !GetAtt CodeDeployStack.Outputs.CodeDeployApplication
+        CodeDeployDeploymentGroup: !GetAtt CodeDeployStack.Outputs.CodeDeployDeploymentGroup
 
 Outputs:
   ECRRepository:
@@ -179,6 +182,12 @@ Outputs:
 
   ALBEndpoint:
     Value: !GetAtt ALBStack.Outputs.ALBEndpoint
+
+  ClusterName:
+    Value: !GetAtt FargateStack.Outputs.Cluster
+
+  ServiceName:
+    Value: !GetAtt FargateStack.Outputs.ServiceName
 
   TaskDefinition:
     Value: !GetAtt FargateStack.Outputs.TaskDefinition

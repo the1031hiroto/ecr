@@ -34,12 +34,19 @@ jobs:
         role-session-name: GitHubActions-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Get Names
+    - name: Get Stack Info
+      id: get-stack-info
       run: |
-        echo "REPOSITORY_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "ECRRepository") | .OutputValue')" >> $GITHUB_ENV
-        echo "TASK_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "TaskDefinition") | .OutputValue')" >> $GITHUB_ENV
-        echo "CODEDEPLOY_APP_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "CodeDeployApplication") | .OutputValue')" >> $GITHUB_ENV
-        echo "CODEDEPLOY_GROUP_NAME=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]  | select(.OutputKey == "CodeDeployDeploymentGroup") | .OutputValue')" >> $GITHUB_ENV
+        STACK_OUTPUTS=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} | jq -r '.Stacks[].Outputs[]')
+        echo "::set-output name=repository-name::$(echo $STACK_OUTPUTS | jq -r '. | select(.OutputKey == "ECRRepository") | .OutputValue')"
+        echo "::set-output name=codedeploy-app-name::$(echo $STACK_OUTPUTS | jq -r '. | select(.OutputKey == "CodeDeployApplication") | .OutputValue')"
+        echo "::set-output name=codedeploy-group-name::$(echo $STACK_OUTPUTS | jq -r '. | select(.OutputKey == "CodeDeployDeploymentGroup") | .OutputValue')"
+        TASK_NAME=$(echo $STACK_OUTPUTS | jq -r '. | select(.OutputKey == "TaskDefinition") | .OutputValue')
+        aws ecs describe-task-definition --task-definition $TASK_NAME --query taskDefinition > aws/task-definition.json
+        echo "::set-output name=container-name::$(cat aws/task-definition.json | jq -r -r '.containerDefinitions[].name')"
+        echo "::set-output name=cluser-name::$(echo $STACK_OUTPUTS | jq -r '. | select(.OutputKey == "ClusterName") | .OutputValue')"
+        echo "::set-output name=service-name::$(echo $STACK_OUTPUTS | jq -r '. | select(.OutputKey == "ServiceName") | .OutputValue')"
+
 
     - name: Login to Amazon ECR
       id: login-ecr
@@ -50,28 +57,25 @@ jobs:
       id: build-image
       with:
         push: true
-        tags: ${{ env.REPOSITORY_NAME }}:latest
+        tags: ${{ steps.get-stack-info.outputs.repository-name }}:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
-    - name: Download Task Definition
-      run: |
-        aws ecs describe-task-definition --task-definition ${{ env.TASK_NAME }} --query taskDefinition > aws/task-definition.json
-        echo "CONTAINER_NAME=$(aws ecs describe-task-definition --task-definition ${{ env.TASK_NAME }} --query taskDefinition | jq -r '.containerDefinitions[].name')" >> $GITHUB_ENV
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: aws/task-definition.json
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ env.REPOSITORY_NAME }}:latest
+        container-name: ${{ steps.get-stack-info.outputs.container-name }}
+        image: ${{ steps.get-stack-info.outputs.repository-name }}:latest
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
+        cluster: ${{ steps.get-stack-info.outputs.cluser-name }}
+        service: ${{ steps.get-stack-info.outputs.service-name }}
         wait-for-service-stability: true
         codedeploy-appspec: aws/appspec.yml
-        codedeploy-application: ${{ env.CODEDEPLOY_APP_NAME }}
-        codedeploy-deployment-group: ${{ env.CODEDEPLOY_GROUP_NAME }}
+        codedeploy-application: ${{ steps.get-stack-info.outputs.codedeploy-app-name }}
+        codedeploy-deployment-group: ${{ steps.get-stack-info.outputs.codedeploy-group-name }}
